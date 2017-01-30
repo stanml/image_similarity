@@ -1,5 +1,6 @@
 from skimage.feature import (match_descriptors,plot_matches)
 import itertools as it
+import editdistance
 import pdb
 
 def matched_features(data, pair, names):
@@ -10,8 +11,7 @@ def matched_features(data, pair, names):
 def matched_text(data, pair, names):
   text1 = data[names[pair[0]]]['text']
   text2 = data[names[pair[1]]]['text']
-  matches = [x for x in text1 if x in text2]
-  return [x for x in matches if x is not None]
+  return editdistance.eval(text1, text2)
 
 def compare(data, sets, names):
   results = {}
@@ -32,26 +32,22 @@ def keypoint_matches(data, names, results, pair):
 
 def text_matches(data, names, results, pair):
   n_words = (len(data[names[pair[0]]]['text']) + len(data[names[pair[1]]]['text'])) / 2
-  n_text_matches = len(results[pair]['text'])
-  return (float(n_text_matches) / n_words) * 100
+  n_text_matches = float(n_words - results[pair]['text'])
+  return (n_text_matches / n_words) * 100
+
+def analysis(text_score, descriptor_score):
+  return "text similarity: %d%%, image similarity: %d%%" % (text_score, descriptor_score)
 
 def similarity_score(text_score, descriptor_score):
   return (text_score + descriptor_score) / 2
-
-#def analysis(data, names, results, pair):
-#  perc_text = text_matches(data, names, results, pair)
-#  perc_desc = keypoint_matches(data, names, results, pair)
-#  return "%s & %s: %d%% similarity" % (names[pair[0]], names[pair[1]], similarity_score(perc_text, perc_desc))
-#
-#def summary(data, names, results, combinations):
-#  return map(lambda x: analysis(data, names, results, x), combinations)
 
 def flagged_images(data, names, results, threshold, pair):
   perc_text = text_matches(data, names, results, pair)
   perc_desc = keypoint_matches(data, names, results, pair)
   sim_score = similarity_score(perc_text, perc_desc)
+  a = analysis(perc_text, perc_desc)
   if sim_score > threshold:
-    return [names[pair[0]], names[pair[1]], str(round(sim_score, 1))]
+    return [names[pair[0]], names[pair[1]], str(round(sim_score, 1)), a]
 
 def search_similarity(data, names, results, combinations, threshold):
   similar_images = map(lambda x: flagged_images(data, names, results, threshold, x), combinations)

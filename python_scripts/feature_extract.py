@@ -17,26 +17,25 @@ def orb_features(image, distance, extractor):
   descriptors = extractor.descriptors
   return descriptors
 
-def extract_text(image):
-  text = image_to_string(image).split()
-  clean_text = map(lambda x: clean_text_array(x), text)
-  return [x for x in clean_text if x is not None]
+def extract_text(image, language):
+  text = image_to_string(image, lang=language, config='-psm 3')
+  return text
 
 def clean_text_array(string):
   clean_data =  "".join(e for e in string if e.isalnum())
   if len(clean_data) > 1:
     return clean_data
 
-def extract_features(filename, downsize_factor, distance):
-  image = load_image(filename)
-  gray = pre_process(image.convert('L'), downsize_factor)
+def extract_features(filename, downsize_factor, distance, language):
+  image = load_image(filename).convert('L')
+  gray = pre_process(image, downsize_factor)
   extractor = ORB(n_keypoints=500)
   descriptors = orb_features(gray, distance, extractor)
-  text = extract_text(image)
+  text = extract_text(image, language)
   return descriptors, text, gray
 
-def main(filename, downsize_factor, distance):
-  data = extract_features(filename, downsize_factor, distance)
+def main(filename, downsize_factor, distance, language):
+  data = extract_features(filename, downsize_factor, distance, language)
   return data
 
 if __name__ == '__main__' : main()
