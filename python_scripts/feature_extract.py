@@ -1,41 +1,76 @@
-from skimage.transform import downscale_local_mean
-from skimage.feature import ORB
 from PIL import Image
 from pytesseract import *
 import numpy as np
+import requests
+import cv2
+from segment import Segment
+from urllib2 import urlopen
 
-def load_image(filename):
-  return Image.open(filename)
+# This class extracts features from each concept by using the image url passed
+# in. Firstly we attempt to segment each image, if this is not possible we
+# extract text and features from the whole concept. The extraction methiod is
+# handles by OpenCV and is equivalent to the scale inavriant feature transform
+# (SIFT) algorithm which is the state of the art methood for extracting image
+# features. Images are resized so that the largest dimension is 1200px, this is
+# so we can perform the same process on all inputs.
 
-def pre_process(image, downsize_factor):
-  gray = np.array(image.getdata(),np.uint8).reshape(image.size[1], image.size[0])
-  return downscale_local_mean(gray, (downsize_factor,downsize_factor))
+class FeatureExtract:
 
-def orb_features(image, distance, extractor):
-  extractor.detect_and_extract(image)
-  keypoints = extractor.keypoints
-  descriptors = extractor.descriptors
-  return descriptors
+  def __init__(self, filepaths, ids, language):
+    self.filepaths = filepaths
+    self.ids = ids
+    self.downsize_factor = 1
+    self.distance = 1
+    self.language = language
+    self.data = {}
+    self.threshold_type = 'segment'
 
-def extract_text(image, language):
-  text = image_to_string(image, lang=language, config='-psm 3')
-  return text
+  def get_features(self):
+    return self.__extract_features(self.data)
 
-def clean_text_array(string):
-  clean_data =  "".join(e for e in string if e.isalnum())
-  if len(clean_data) > 1:
-    return clean_data
+  def __extract_features(self, data):
+    for i in range(0, len(self.filepaths)):
+      if self.filepaths[i] != 'False':
+        image = self.__load_image(self.filepaths[i])
+        seg = Segment(image, self.language)
+        image_no_text, text = seg.segment_text()
+        combined_text = ' '.join(text)
+        if len(combined_text) == 0 or combined_text.isspace():
+            text_image = self.__pre_process(image)
+            text = image_to_string(text_image, lang=self.language, config='-psm 3')
+            self.threshold_type = 'default'
+        keypoints, descriptors = self.__ORB_features(image_no_text)
+        if descriptors is None:
+            descriptors = np.array([])
+        data[self.ids[i]] = {
+        'text': text,
+        'descriptors': descriptors,
+        'threshold': self.threshold_type
+        }
+    return data
 
-def extract_features(filename, downsize_factor, distance, language):
-  image = load_image(filename).convert('L')
-  gray = pre_process(image, downsize_factor)
-  extractor = ORB(n_keypoints=500)
-  descriptors = orb_features(gray, distance, extractor)
-  text = extract_text(image, language)
-  return descriptors, text, gray
+  def __load_image(self, filename):
+    #request = urlopen(filename)
+    #img_array = np.asarray(bytearray(request.read()), dtype=np.uint8)
+    #image = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
+    image = cv2.imread(filename)
+    width, height, _ = image.shape
+    if (height < 1200) and (height > width):
+        return self.__resize_image(image, height, width, 1200)
+    elif (width < 1200) and (width > height):
+        return self.__resize_image(image, width, height, 1200)
+    else:
+        return image
 
-def main(filename, downsize_factor, distance, language):
-  data = extract_features(filename, downsize_factor, distance, language)
-  return data
+  def __resize_image(self, image, dimension1, dimension2, new_size):
+    ratio = float(new_size) / dimension1
+    dim = (new_size, int(dimension2 * ratio))
+    return cv2.resize(image, dim, interpolation = cv2.INTER_AREA)
 
-if __name__ == '__main__' : main()
+  def __ORB_features(self, image):
+    detector = cv2.AKAZE_create()
+    detector.setThreshold(0.004)
+    return detector.detectAndCompute(image,None)
+
+  def __pre_process(self, image):
+    return Image.fromarray(image).convert('L')
