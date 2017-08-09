@@ -1,7 +1,7 @@
 # Image Similarity
 A python package for determining the similarity of concepts boards through image and text analysis, this is to provide and automated solution to the market research problem of including similar concept boards in a monadic sequential survey.
 
-### External packages/Libraries
+### External packages/libraries
 To run the image similarity python class you will need to install the following external libraries:
 
 |Package			|Version		| Install command (macOS)               				|
