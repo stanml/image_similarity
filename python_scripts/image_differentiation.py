@@ -1,53 +1,51 @@
-import feature_extract
-import compare
+from feature_extract import *
+from compare import *
 import sys
+import json
 import time
-import matplotlib.pyplot as plt
-import numpy as np
 
-def parameters():
-  return sys.argv[1].split(','), map(int, sys.argv[2].split(',')), sys.argv[3]
+def inputs():
+  #arguments = sys.stdin.readline().split(' ')
+  #return arguments[0].split(','), arguments[1].split(',')
+  return sys.argv[1].split(','), sys.argv[2].split(',')
 
-def get_data(filenames, downsize_factor, distance, language):
-  data = {}
-  start_time = time.time()
-  for i in range(0, len(filenames)):
-    filename = filenames[i]
-    features = feature_extract.main(filename, downsize_factor, distance, language)
-    data[filename] = {'descriptors' : features[0], 'text' : features[1], 'image': features[2]}
-  print "--- Extraction took %s seconds ---" % (time.time() - start_time)
+def results_structure(names, data={}):
+  for name in names:
+    data[name] = {
+    'index': names.index(name),
+     'matchingImages': []
+    }
   return data
 
-def results_to_string(results):
-  flat_results = [item for result in results for item in result]
-  return (' ').join(flat_results)
+def add_data(v, score, names, text, image, threshold):
+  entry = {
+    'id': v,
+    'index': names.index(v),
+    'similarity_score': score,
+    'text_score': text,
+    'image_score': image,
+    'threshold': threshold
+  }
+  return entry
 
-def plot_results(results, data):
-  n = len(results)
-  if n > 0:
-    fig, axarr = plt.subplots(n)
-    if n > 1:
-      for i in range(0, n):
-        image = np.concatenate((data[results[i][0]]['image'], data[results[i][1]]['image']), axis=1)
-        axarr[i].imshow(image, cmap='gray')
-        axarr[i].set_title("%s and %s are too similar (%s)" % (results[i][0], results[i][1], results[i][3]))
-        axarr[i].axes.get_xaxis().set_visible(False)
-        axarr[i].axes.get_yaxis().set_visible(False)
-    else:
-      image = np.concatenate((data[results[0][0]]['image'], data[results[0][1]]['image']), axis=1)
-      axarr.imshow(image, cmap='gray')
-      axarr.set_title("%s and %s are too similar (%s)" % (results[0][0], results[0][1], results[0][3]))
-      axarr.axes.get_xaxis().set_visible(False)
-      axarr.axes.get_yaxis().set_visible(False)
-    plt.gray()
-    plt.show()
-  else:
-    return
+def output_data(matching_pairs, names):
+  data = results_structure(names)
+  for pair in matching_pairs:
+    key = pair['matchingImages'][0]
+    value = pair['matchingImages'][1]
+    score = pair['similarityScore']
+    text_score = pair['text']
+    image_score = pair['image']
+    threshold = pair['threshold']
+    data[key]['matchingImages'].append(add_data(value, score, names, text_score, image_score, threshold))
+    data[value]['matchingImages'].append(add_data(key, score, names, text_score, image_score, threshold))
+  return data
 
 def main():
-  filenames, params, language = parameters()
-  data = get_data(filenames, params[0], params[1], language)
-  results = compare.main(filenames, data, params[2])
-  plot_results(results, data)
+  filepaths, ids = inputs()
+  extractor = FeatureExtract(filepaths, ids, 'eng')
+  results = Compare(extractor.get_features())
+  output = output_data(results.get_results(), ids)
+  sys.stderr.write(json.dumps(output))
 
 if __name__ == '__main__' : main()
